@@ -1,0 +1,69 @@
+Presequisite: You'll need to install a copy of GCC that supports
+plugins (I used gcc 4.6.3). Make sure to enable support for both C and
+C++.
+
+This tarball includes:
+
+  (1) a copy of LLVM with a new pass that inserts data-race detection
+  calls during compilation
+
+  (2) a runtime that actally implements those data-race detection
+  calls
+
+  (3) Some test code for checking your setup.
+
+Under Runtime, adjust the CFLAGS etc. to reflect the location of your
+copy of glib-2.0. Then run make.
+
+Under the provided copy of llvm-3.0, create a folder obj/ so now there
+are folders src and obj at the same level. cd into obj and run:
+
+../src/configure --prefix=$PWD/../install
+make
+make install
+
+Now cd into the provided copy of dragonegg-3.0-src. Set LLVM_CONFIG to
+be the location of llvm-config:
+
+export LLVM_CONFIG=$PWD/../llvm-3.0/install/bin/llvm-config
+
+Then compile dragonegg, setting GCC to your copy of gcc 4.6 (see the
+dragonegg instructions):
+
+GCC=/path/to/gcc make
+
+Now cd into test. Set your LD_LIBRARY_PATH to the location of the runtime:
+
+export LD_LIBRARY_PATH=$PWD/../Runtime2
+
+(I also had to include a path for some libraries needed to get gcc
+working, your experience may vary.) Now compile test.c as follows:
+
+/path/to/g++ -fplugin=$PWD/../dragonegg-3.0.src/dragonegg.so -fplugin-arg-dragonegg-insert-drd-calls -L$PWD/../Runtime2 -lIFR_Runtime -pthread -g test.c -o test
+
+That should be the path to the 4.6.3 version of g++. (The Runtime is
+written in C++ so you need to use g++, not gcc).
+
+Finally, run test - you should see IFRit printing debugging messages
+and hopefully, race reports.
+
+$ ./test
+[IFRit] Hash-table-based implementation in use.
+[IFRit] Single-threaded optimization enabled.
+[IFRit] Partitioning global state into 32 partitions.
+Hello world
+[IFRit] Sampling disabled
+[IFRit] 6 6 : 0x40089a 0x40089a
+Final value of x: 2000
+[IFRit] Bye!
+
+The 6 6 there is a race report saying that IFRs 6 and 6 overlapped.
+The 0x40089a are the addresses of the line numbers.
+
+$ addr2line -e test 0x40089a
+/sampa/home/effinger/drd/drd/test/test.c:10
+
+Note that the compiler produces a file ifrs.txt containing a list of
+IFRs detected in the code. The IFRit code just appends to this file,
+so delete it before recompiling or you'll end up with a bunch of
+redundant copies in the file.
