@@ -155,6 +155,7 @@ ModulePass *llvm::createInsertDRDCallsPass() {
 }
     
 bool InsertDRDCalls::doInitialization(Module &M){
+  outs() << "Initializing IFRit Pass\n";
   return false;
 }
 
@@ -167,7 +168,7 @@ void InsertDRDCalls::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool InsertDRDCalls::runOnModule(Module &M) {
-  //std::cerr << "Running InsertDRDCalls on module " << M.getModuleIdentifier() << std::endl;
+  outs() << "Running InsertDRDCalls on module " << M.getModuleIdentifier() << "\n";
 
   // Do a backwards (ABNA) analysis to find IFRs that start at calls
   // and at basic block entries.

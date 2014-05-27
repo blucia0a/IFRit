@@ -1,53 +1,60 @@
-Presequisite: You'll need to install a copy of GCC that supports
-plugins (I used gcc 4.6.3). Make sure to enable support for both C and
-C++.
+--------------------
+IFRit - an interference-free-region based data race detection tool
+Implementation by Laura Effinger-Dean and Brandon Lucia
+-
+Based on the ideas in the OOPSLA 2012 paper
 
-This tarball includes:
+IFRit: Interference-Free Regions for Dynamic Data-Race Detection 
+  by Laura Effinger-Dean, Brandon Lucia, Luis Ceze, Dan Grossman, and Hans-J. Boehm
+--------------------  
 
-  (1) a copy of LLVM with a new pass that inserts data-race detection
+This repository includes:
+
+(1) a copy of LLVM with a new pass that inserts data-race detection
   calls during compilation
 
-  (2) a runtime that actally implements those data-race detection
+(2) a runtime that actally implements those data-race detection
   calls
 
-  (3) Some test code for checking your setup.
+(3) A test program to check your setup.
 
-Under Runtime, adjust the CFLAGS etc. to reflect the location of your
-copy of glib-2.0. Then run make.
 
-Under the provided copy of llvm-3.0, create a folder obj/ so now there
-are folders src and obj at the same level. cd into obj and run:
+---------------------------------
 
-../src/configure --prefix=$PWD/../install
-make
-make install
+Compiler Pass Build pre-requisites:
 
-Now cd into the provided copy of dragonegg-3.0-src. Set LLVM_CONFIG to
-be the location of llvm-config:
+1)Install LLVM from source
+2)Install Clang, building against the LLVM you built in step (1)
+3)Install CMake
 
-export LLVM_CONFIG=$PWD/../llvm-3.0/install/bin/llvm-config
+Building the compiler pass:
+$cd /path/to/ifrit/LLVM
+$cmake -DIFRIT_LLVM_DIR=/path/to/LLVM .
+$make
 
-Then compile dragonegg, setting GCC to your copy of gcc 4.6 (see the
-dragonegg instructions):
+--
+Runtime Build Pre-requisites:
 
-GCC=/path/to/gcc make
+1)Install glib-2
 
-Now cd into test. Set your LD_LIBRARY_PATH to the location of the runtime:
+Building the runtime:
+$cd /path/to/ifrit/Runtime
+$make
 
-export LD_LIBRARY_PATH=$PWD/../Runtime2
+note that there are several #define build options in the Runtime source 
 
-(I also had to include a path for some libraries needed to get gcc
-working, your experience may vary.) Now compile test.c as follows:
+------------------------------------
 
-/path/to/g++ -fplugin=$PWD/../dragonegg-3.0.src/dragonegg.so -fplugin-arg-dragonegg-insert-drd-calls -L$PWD/../Runtime2 -lIFR_Runtime -pthread -g test.c -o test
+Testing the setup:
 
-That should be the path to the 4.6.3 version of g++. (The Runtime is
-written in C++ so you need to use g++, not gcc).
-
-Finally, run test - you should see IFRit printing debugging messages
-and hopefully, race reports.
-
+$cd /path/to/ifrit/Test
+-edit the Makefile in that directory so the paths point to your installation 
+ of IFRIT and clang.  Note that you must use the same clang as the one 
+ that you linked against the LLVM that you used to build the pass
+$export DYLD_LIBRARY_PATH=/path/to/ifrit/Runtime:$DYLD_LIBRARY_PATH
 $ ./test
+
+You should then see some output like this.
 [IFRit] Hash-table-based implementation in use.
 [IFRit] Single-threaded optimization enabled.
 [IFRit] Partitioning global state into 32 partitions.

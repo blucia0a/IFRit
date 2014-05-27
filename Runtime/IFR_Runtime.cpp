@@ -11,6 +11,83 @@
 
 #include <glib.h>//for GHashTable
 
+
+
+/*MAC OSX Pthread barrier hack -- 
+http://blog.albertarmea.com/post/47089939939/using-pthread-barrier-on-mac-os-x
+*/
+#ifdef __APPLE__
+
+#ifndef PTHREAD_BARRIER_H_
+#define PTHREAD_BARRIER_H_
+
+#include <pthread.h>
+#include <errno.h>
+
+typedef int pthread_barrierattr_t;
+typedef struct
+{
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int count;
+    int tripCount;
+} pthread_barrier_t;
+
+
+int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count)
+{
+    if(count == 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+    if(pthread_mutex_init(&barrier->mutex, 0) < 0)
+    {
+        return -1;
+    }
+    if(pthread_cond_init(&barrier->cond, 0) < 0)
+    {
+        pthread_mutex_destroy(&barrier->mutex);
+        return -1;
+    }
+    barrier->tripCount = count;
+    barrier->count = 0;
+
+    return 0;
+}
+
+int pthread_barrier_destroy(pthread_barrier_t *barrier)
+{
+    pthread_cond_destroy(&barrier->cond);
+    pthread_mutex_destroy(&barrier->mutex);
+    return 0;
+}
+
+int pthread_barrier_wait(pthread_barrier_t *barrier)
+{
+    pthread_mutex_lock(&barrier->mutex);
+    ++(barrier->count);
+    if(barrier->count >= barrier->tripCount)
+    {
+        barrier->count = 0;
+        pthread_cond_broadcast(&barrier->cond);
+        pthread_mutex_unlock(&barrier->mutex);
+        return 1;
+    }
+    else
+    {
+        pthread_cond_wait(&barrier->cond, &(barrier->mutex));
+        pthread_mutex_unlock(&barrier->mutex);
+        return 0;
+    }
+}
+
+#endif // PTHREAD_BARRIER_H_
+#endif // __APPLE__
+
+
+
+
 #include "IFR.h"
 #include "IFR_Runtime.h"
 
@@ -287,8 +364,12 @@ void thd_dtr(void*d){
 #endif
 
 #ifdef IFRIT_HASH_TABLE
-  g_hash_table_destroy(myWriteIFRs);
-  g_hash_table_destroy(myReadIFRs);
+  if( myWriteIFRs != NULL ){
+    g_hash_table_destroy(myWriteIFRs);
+  }
+  if( myReadIFRs != NULL ){
+    g_hash_table_destroy(myReadIFRs);
+  }
 #endif
 
 #ifdef DUPLICATE_STATS
@@ -300,7 +381,9 @@ void thd_dtr(void*d){
   delete_ifr(raceCheckIFR);
 
 #ifdef PROGRAM_POINT_OPT
-  g_hash_table_destroy(PCTable);
+  if( PCTable != NULL ){
+    g_hash_table_destroy(PCTable);
+  }
 #endif
 }
 
@@ -436,11 +519,15 @@ void sigint(int sig) {
   //fprintf(stderr, "[IFRit] Rough insertion weight (thread %p): %lu\n", pthread_self(), insertionCount);
 
 #ifdef THREAD_LOCAL_OPT
-  g_hash_table_destroy(ThreadLocalTable);
+  if( ThreadLocalTable != NULL ){
+    g_hash_table_destroy(ThreadLocalTable);
+  }
 #endif
 
 #ifdef READ_SHARED_OPT
-  g_hash_table_destroy(ReadSharedTable);
+  if( ReadSharedTable != NULL ){
+    g_hash_table_destroy(ReadSharedTable);
+  }
 #endif
 
 #ifdef DUPLICATE_STATS
@@ -648,9 +735,11 @@ void deactivateReadIFR(unsigned long varg){
       exit(1);
     }
 
-    if( !g_hash_table_size(ifrs) ){
-      g_hash_table_remove(ACTIVE_MAY_WRITE_TABLE(varg),(gconstpointer)varg);
-      g_hash_table_destroy(ifrs);
+    if( ifrs != NULL ){
+      if( !g_hash_table_size(ifrs) ){
+        g_hash_table_remove(ACTIVE_MAY_WRITE_TABLE(varg),(gconstpointer)varg);
+        g_hash_table_destroy(ifrs);
+      }
     }
 
   } else {
@@ -691,6 +780,8 @@ void IFR_raceCheck(gpointer key, gpointer value, gpointer data){
 #define GET_NUM_ACTIVE_IFRS \
   (g_hash_table_size(myWriteIFRs) + g_hash_table_size(myReadIFRs))
 #endif
+
+#define IFR_TABLES_VALID (myWriteIFRs != NULL && myReadIFRs != NULL)
 
 #ifdef IFRIT_ARRAY
 /* sorts an array in which only the last element is unsorted. order n instead of nlogn */
@@ -1435,12 +1526,14 @@ gboolean process_end_read(gpointer key, gpointer value, gpointer user_data) {
 #endif
 
 void IFRit_end_ifrs_internal(unsigned long numMay, unsigned long numMust, va_list *ap) {
-  if (GET_NUM_ACTIVE_IFRS == 0) {
+  if (IFR_TABLES_VALID && GET_NUM_ACTIVE_IFRS == 0) {
     return;
   }
 
 #ifdef PROGRAM_POINT_OPT
-  g_hash_table_destroy(PCTable);
+  if( PCTable != NULL ){
+    g_hash_table_destroy(PCTable);
+  }
   PCTable = g_hash_table_new(g_direct_hash, g_direct_equal);
 #endif
 
@@ -1467,7 +1560,9 @@ void IFRit_end_ifrs_internal(unsigned long numMay, unsigned long numMust, va_lis
   endIFRsInfo->downgradeVars = (unsigned long *)
     calloc(numMay, sizeof(unsigned long));
 
-  PROCESS_END_IFRS;
+  if( IFR_TABLES_VALID ){
+    PROCESS_END_IFRS;
+  }
 
   /* Insert downgraded IFRs into the read IFR array. */
   add_ifrs_to_local_state(endIFRsInfo->numDowngrade,
