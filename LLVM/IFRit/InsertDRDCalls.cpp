@@ -41,7 +41,7 @@ namespace {
 
     // Run pass after dominator tree is created.
     static llvm::RegisterStandardPasses 
-        RegisterIFRIT(llvm::PassManagerBuilder::EP_OptimizerLast, registerIFRIT);
+        RegisterIFRIT(llvm::PassManagerBuilder::EP_EnabledOnOptLevel0, registerIFRIT);
 }
 
 using namespace llvm;
